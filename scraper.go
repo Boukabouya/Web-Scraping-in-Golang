@@ -5,24 +5,22 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/gocolly/colly"
 )
 
-// initializing a data structure to keep the scraped data
 type PokemonProduct struct {
 	url, image, name, price string
 }
 
 func main() {
-	// initializing the slice of structs to store the data to scrape
 	var pokemonProducts []PokemonProduct
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	// creating a new Colly instance
 	c := colly.NewCollector()
 
-	// visiting the target page
-	c.Visit("https://scrapeme.live/shop/")
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Visiting: ", r.URL)
 	})
@@ -35,16 +33,6 @@ func main() {
 		fmt.Println("Page visited: ", r.Request.URL)
 	})
 
-	c.OnHTML("a", func(e *colly.HTMLElement) {
-		// printing all URLs associated with the a links in the page
-		fmt.Println("%v", e.Attr("href"))
-	})
-
-	c.OnScraped(func(r *colly.Response) {
-		fmt.Println(r.Request.URL, " scraped!")
-	})
-
-	// scraping logic
 	c.OnHTML("li.product", func(e *colly.HTMLElement) {
 		pokemonProduct := PokemonProduct{}
 
@@ -56,17 +44,24 @@ func main() {
 		pokemonProducts = append(pokemonProducts, pokemonProduct)
 	})
 
-	// opening the CSV file
+	c.OnScraped(func(r *colly.Response) {
+		defer wg.Done()
+		fmt.Println(r.Request.URL, " scraped!")
+	})
+
+	c.Visit("https://scrapeme.live/shop/")
+
+	wg.Wait()
+
 	file, err := os.Create("products.csv")
 	if err != nil {
 		log.Fatalln("Failed to create output CSV file", err)
 	}
 	defer file.Close()
 
-	// initializing a file writer
 	writer := csv.NewWriter(file)
+	defer writer.Flush()
 
-	// writing the CSV headers
 	headers := []string{
 		"url",
 		"image",
@@ -75,18 +70,13 @@ func main() {
 	}
 	writer.Write(headers)
 
-	// writing each Pokemon product as a CSV row
 	for _, pokemonProduct := range pokemonProducts {
-		// converting a PokemonProduct to an array of strings
 		record := []string{
 			pokemonProduct.url,
 			pokemonProduct.image,
 			pokemonProduct.name,
 			pokemonProduct.price,
 		}
-
-		// adding a CSV record to the output file
 		writer.Write(record)
 	}
-	defer writer.Flush()
 }
