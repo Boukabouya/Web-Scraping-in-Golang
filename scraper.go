@@ -1,4 +1,4 @@
-package main
+/*package main
 
 import (
 	"encoding/csv"
@@ -12,7 +12,7 @@ import (
 type PokemonProduct struct {
 	url, image, name, price string
 }
-
+*/
 /*
 func main() {
 	var pokemonProducts []PokemonProduct
@@ -83,29 +83,29 @@ func main() {
 */
 //Advanced Techniques in Web Scraping with Golang
 
-func main() {
+/*func main() {
 	var pokemonProducts []PokemonProduct
 
 	// the first pagination URL to scrape
 
-	pagesToScrape := []string{ 
-		"https://scrapeme.live/shop/page/1/", 
-		"https://scrapeme.live/shop/page/2/", 
-		// ... 
-		"https://scrapeme.live/shop/page/47/", 
-		"https://scrapeme.live/shop/page/48/", 
+	pagesToScrape := []string{
+		"https://scrapeme.live/shop/page/1/",
+		"https://scrapeme.live/shop/page/2/",
+		// ...
+		"https://scrapeme.live/shop/page/47/",
+		"https://scrapeme.live/shop/page/48/",
 	}
-	
+
 
 	// initializing a Colly collector
-	c := colly.NewCollector( 
-		// turning on the asynchronous request mode in Colly 
-		colly.Async(true), 
-	) 
-	c.Limit(&colly.LimitRule{ 
-		// limit the parallel requests to 4 request at a time 
-		Parallelism: 4, 
-	}) 
+	c := colly.NewCollector(
+		// turning on the asynchronous request mode in Colly
+		colly.Async(true),
+	)
+	c.Limit(&colly.LimitRule{
+		// limit the parallel requests to 4 request at a time
+		Parallelism: 4,
+	})
 
 	// Setting a valid User-Agent header for Linux Debian and Brave browser
 	c.UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Brave/90.0.0.0"
@@ -134,10 +134,10 @@ func main() {
 		pokemonProducts = append(pokemonProducts, pokemonProduct)
 		mu.Unlock()
 	})
-		// registering all pages to scrape 
-	for _, pageToScrape := range pagesToScrape { 
-		c.Visit(pageToScrape) 
-	} 
+		// registering all pages to scrape
+	for _, pageToScrape := range pagesToScrape {
+		c.Visit(pageToScrape)
+	}
 
 	// Wait for the collector to finish
 	c.Wait()
@@ -179,4 +179,88 @@ func contains(s []string, str string) bool {
 		}
 	}
 	return false
+}
+*/
+//Scraping Dynamic-Content Websites with a Headless Browser in Go
+package main
+
+import (
+	"context"
+	"encoding/csv"
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/chromedp"
+	"log"
+	"os"
+)
+
+type PokemonProduct struct {
+	url, image, name, price string
+}
+
+func main() {
+	var pokemonProducts []PokemonProduct
+
+	// initializing a chrome instance
+	ctx, cancel := chromedp.NewContext(
+		context.Background(),
+		chromedp.WithLogf(log.Printf),
+	)
+	defer cancel()
+
+	// navigate to the target web page and select the HTML elements of interest
+	var nodes []*cdp.Node
+	chromedp.Run(ctx,
+		chromedp.Navigate("https://scrapeme.live/shop"),
+		chromedp.Nodes(".product", &nodes, chromedp.ByQueryAll),
+	)
+
+	// scraping data from each node
+	var url, image, name, price string
+	for _, node := range nodes {
+		chromedp.Run(ctx,
+			chromedp.AttributeValue("a", "href", &url, nil, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.AttributeValue("img", "src", &image, nil, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text("h2", &name, chromedp.ByQuery, chromedp.FromNode(node)),
+			chromedp.Text(".price", &price, chromedp.ByQuery, chromedp.FromNode(node)),
+		)
+
+		pokemonProduct := PokemonProduct{}
+
+		pokemonProduct.url = url
+		pokemonProduct.image = image
+		pokemonProduct.name = name
+		pokemonProduct.price = price
+
+		pokemonProducts = append(pokemonProducts, pokemonProduct)
+	}
+
+	// export logic
+	// Write the data to a CSV file
+	file, err := os.Create("products_With_chromedp.csv")
+	if err != nil {
+		log.Fatalf("Failed to create output CSV file: %v", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	headers := []string{
+		"url",
+		"image",
+		"name",
+		"price",
+	}
+	writer.Write(headers)
+
+	for _, pokemonProduct := range pokemonProducts {
+		record := []string{
+			pokemonProduct.url,
+			pokemonProduct.image,
+			pokemonProduct.name,
+			pokemonProduct.price,
+		}
+		writer.Write(record)
+	}
+
 }
